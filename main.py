@@ -10,7 +10,7 @@ from string import Template
 from auth import AzureAuthClient
 from xml.etree import ElementTree
 import nexmo
-from config import NEXMO_APPLICATION_ID, NEXMO_PRIVATE_KEY, WATSON_USERNAME, WATSON_PASSWORD, WATSON_URL, MICROSOFT_TRANSLATION_CLIENT_SECRET, HOSTNAME
+from config import NEXMO_APPLICATION_ID, NEXMO_PRIVATE_KEY, MICROSOFT_TRANSLATION_CLIENT_SECRET, HOSTNAME
 
 client = nexmo.Client(application_id=NEXMO_APPLICATION_ID, private_key=NEXMO_PRIVATE_KEY)
 
@@ -18,17 +18,6 @@ language_model = 'en-UK_NarrowbandModel' # Specify the Narrowband model for your
 
 auth_client = AzureAuthClient(MICROSOFT_TRANSLATION_CLIENT_SECRET)
 microsoft_translator_bearer_token = 'Bearer ' + auth_client.get_access_token()
-
-def gettoken():
-    resp = requests.get('https://stream.watsonplatform.net/authorization/api/v1/token', auth=(WATSON_USERNAME, WATSON_PASSWORD), params={'url' : WATSON_URL})
-    token = None
-    if resp.status_code == 200:
-        token = resp.content
-    else:
-        print resp.status_code
-        print resp.content
-
-    return token
 
 class MainHandler(tornado.web.RequestHandler):
     @tornado.web.asynchronous
@@ -73,57 +62,22 @@ class MessageHandler():
                         print('To be translated: ' + text)
                         translate(text, 'en', 'de')
 
-class WatsonHandler():
-    def __init__(self, token, model, callback):
-        uri = 'wss://stream.watsonplatform.net/speech-to-text/api/v1/recognize?watson-token={}&model={}'.format(token, model)
-        self.watson_future = tornado.websocket.websocket_connect(uri, on_message_callback=self.on_message)
-        print("Got Future:", self.watson_future)
-        self.callback = callback
-        print("Got Callback:", self.callback)
-
-    def close(self):
-        ws = yield self.watson_future
-        data = {'action' : 'stop'}
-        ws.write_message(json.dumps(data), binary=False)
-        ws.close()
-
-    def write_message(self, message):
-        print "watson.write_message"
-        ws = yield self.watson_future
-        if type(message) == str:
-            ws.write_message(message, binary=True)
-        else:
-            data = json.loads(message)
-            data['action'] = "start"
-            data['continuous'] = True
-            data['interim_results'] = True
-            print json.dumps(data)
-            ws.write_message(json.dumps(data), binary=False)
-
-    def on_message(self, message):
-        print "watson.on_message"
-        self.callback(message)
-
 class WSHandler(tornado.websocket.WebSocketHandler):
     def open(self):
         print("Websocket Call Connected")
-        self.watson = WatsonHandler(gettoken(), language_model, self.tts_completed)
-        print("Hi???")
 
     def tts_completed(self, new_message):
-        print("TTS COMPLETED")
+        print "TTS COMPLETED"
         h = MessageHandler(new_message)
         result = h.handle()
 
     @gen.coroutine
     def on_message(self, message):
-        print("Received Message", self.watson, self.watson.write_message)
-        self.watson.write_message(message)
+        print "Received Message"
 
     @gen.coroutine
     def on_close(self):
         print("Websocket Call Disconnected")
-        self.watson.close()
 
 def translate(text, from_language, to_language):
     headers = {"Authorization ": microsoft_translator_bearer_token}
