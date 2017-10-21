@@ -11,13 +11,9 @@ from auth import AzureAuthClient
 from xml.etree import ElementTree
 import nexmo
 
-from config import NEXMO_APPLICATION_ID, NEXMO_PRIVATE_KEY, WATSON_USERNAME, WATSON_PASSWORD, WATSON_URL, MICROSOFT_TRANSLATION_CLIENT_SECRET
-
-translator = Translator(MICROSOFT_TRANSLATION_ID, MICROSOFT_TRANSLATION_KEY)
+from config import NEXMO_APPLICATION_ID, NEXMO_PRIVATE_KEY, WATSON_USERNAME, WATSON_PASSWORD, WATSON_URL, MICROSOFT_TRANSLATION_CLIENT_SECRET, HOSTNAME
 
 language_model = 'en-UK_NarrowbandModel' # Specify the Narrowband model for your language
-
-HOSTNAME = 'de24b617.ngrok.io'
 
 auth_client = AzureAuthClient(MICROSOFT_TRANSLATION_CLIENT_SECRET)
 microsoft_translator_bearer_token = 'Bearer ' + auth_client.get_access_token()
@@ -70,8 +66,14 @@ class MessageHandler():
 
     def handle(self):
         print self.msg
-        speak(uuid, "Guten Tag, willkommen bei botify.")
-
+        resp = json.loads(self.msg)
+        if resp:
+            if 'results' in resp and 'alternatives' in resp['results'][0]:
+                if resp['results'][0]['final'] == True:
+                    if 'transcript' in resp['results'][0]['alternatives'][0]:
+                        text = resp["results"][0]["alternatives"][0]["transcript"]
+                        print('To be translated: ' + text)
+                        translate(text, 'de')
 
 
 class WSHandler(tornado.websocket.WebSocketHandler):
@@ -109,7 +111,7 @@ class WSHandler(tornado.websocket.WebSocketHandler):
 
 def translate(text, language):
     headers = {"Authorization ": microsoft_translator_bearer_token}
-    translateUrl = "http://api.microsofttranslator.com/v2/Http.svc/Translate?text={}&to={}".format("Hello World, how are you", "de")
+    translateUrl = "http://api.microsofttranslator.com/v2/Http.svc/Translate?text={}&to={}".format(text, language)
     translationData = requests.get(translateUrl, headers = headers)
 
     translation = ElementTree.fromstring(translationData.text.encode('utf-8'))
