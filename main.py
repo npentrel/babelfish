@@ -71,7 +71,7 @@ class MessageHandler():
                     if 'transcript' in resp['results'][0]['alternatives'][0]:
                         text = resp["results"][0]["alternatives"][0]["transcript"]
                         print('To be translated: ' + text)
-                        translate(text, 'de')
+                        translate(text, 'en', 'de')
 
 class WatsonHandler():
     def __init__(self, token, model, callback):
@@ -125,9 +125,9 @@ class WSHandler(tornado.websocket.WebSocketHandler):
         print("Websocket Call Disconnected")
         self.watson.close()
 
-def translate(text, language):
+def translate(text, from_language, to_language):
     headers = {"Authorization ": microsoft_translator_bearer_token}
-    translateUrl = "http://api.microsofttranslator.com/v2/Http.svc/Translate?text={}&to={}".format(text, language)
+    translateUrl = "http://api.microsofttranslator.com/v2/Http.svc/Translate?text={}&from={}&to={}".format(text, from_language, to_language)
     translationData = requests.get(translateUrl, headers = headers)
 
     translation = ElementTree.fromstring(translationData.text.encode('utf-8'))
