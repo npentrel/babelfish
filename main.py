@@ -13,7 +13,7 @@ from auth import AzureAuthClient
 from xml.etree import ElementTree
 import nexmo
 import StringIO
-from config import NEXMO_APPLICATION_ID, NEXMO_PRIVATE_KEY, MICROSOFT_TRANSLATION_SPEECH_CLIENT_SECRET, HOSTNAME
+from config import NEXMO_APPLICATION_ID, NEXMO_PRIVATE_KEY, MICROSOFT_TRANSLATION_SPEECH_CLIENT_SECRET, HOSTNAME, NEXMO_NUMBER
 
 client = nexmo.Client(application_id=NEXMO_APPLICATION_ID, private_key=NEXMO_PRIVATE_KEY)
 auth_client = AzureAuthClient(MICROSOFT_TRANSLATION_SPEECH_CLIENT_SECRET)
@@ -27,6 +27,19 @@ class MainHandler(tornado.web.RequestHandler):
         self.finish()
 
 class CallHandler(tornado.web.RequestHandler):
+    @tornado.web.asynchronous
+    def get(self):
+        data={}
+        data['hostname'] = HOSTNAME
+        filein = open('ncco.json')
+        src = Template(filein.read())
+        filein.close()
+        ncco = json.loads(src.substitute(data))
+        self.write(json.dumps(ncco))
+        self.set_header("Content-Type", 'application/json; charset="utf-8"')
+        self.finish()
+
+class CallHandler2(tornado.web.RequestHandler):
     @tornado.web.asynchronous
     def get(self):
         data={}
@@ -99,6 +112,15 @@ def make_wave_header(frame_rate):
 
 class WSHandler(tornado.websocket.WebSocketHandler):
     SentHeader = False
+
+    to_number = [{'type': 'phone', 'number': '+447858909938'}]
+    from_number = {'type': 'phone', 'number': '+447520632440'}
+    answer_url = ['https://' + HOSTNAME + '/ncco2']
+
+    response = client.create_call({'to': to_number, 'from': from_number, 'answer_url': answer_url})
+    call_uuid = response['uuid']
+    print('!!!', response['uuid'])
+
     def open(self):
         print("Websocket Call Connected")
         translate_from = 'de'
@@ -110,10 +132,12 @@ class WSHandler(tornado.websocket.WebSocketHandler):
         })
         self.ws_future = tornado.websocket.websocket_connect(request, on_message_callback=self.tts_completed)
 
+
     def tts_completed(self, new_message):
         msg = json.loads(new_message)
         if msg['type'] == 'final':
             print "Complete: " + "'" + msg['recognition'] + "' -> '" + msg['translation'] + "'"
+            speak(self.call_uuid, msg['translation'], 'Kimberly')
 
     @gen.coroutine
     def on_message(self, message):
@@ -147,6 +171,7 @@ def main():
     application = tornado.web.Application([(r"/", MainHandler),
                                            (r"/event", EventHandler),
                                            (r"/ncco", CallHandler),
+                                           (r"/ncco2", CallHandler2),
                                            (r"/socket", WSHandler),
                                            (r'/static/(.*)', tornado.web.StaticFileHandler, {'path': static_path}),
                                           ])
@@ -154,6 +179,7 @@ def main():
     port = int(os.environ.get("PORT", 8000))
     http_server.listen(port)
     print "Running on port: " + str(port)
+
     tornado.ioloop.IOLoop.instance().start()
 
 
