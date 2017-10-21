@@ -7,15 +7,20 @@ import json
 import requests
 import os
 from string import Template
-
+from auth import AzureAuthClient
+from xml.etree import ElementTree
 import nexmo
-from config import NEXMO_APPLICATION_ID, NEXMO_PRIVATE_KEY, WATSON_USERNAME, WATSON_PASSWORD, WATSON_URL
 
-client = nexmo.Client(application_id=NEXMO_APPLICATION_ID, private_key=NEXMO_PRIVATE_KEY)
+from config import NEXMO_APPLICATION_ID, NEXMO_PRIVATE_KEY, WATSON_USERNAME, WATSON_PASSWORD, WATSON_URL, MICROSOFT_TRANSLATION_CLIENT_SECRET
+
+translator = Translator(MICROSOFT_TRANSLATION_ID, MICROSOFT_TRANSLATION_KEY)
 
 language_model = 'en-UK_NarrowbandModel' # Specify the Narrowband model for your language
 
 HOSTNAME = 'de24b617.ngrok.io'
+
+auth_client = AzureAuthClient(MICROSOFT_TRANSLATION_CLIENT_SECRET)
+microsoft_translator_bearer_token = 'Bearer ' + auth_client.get_access_token()
 
 def gettoken():
     resp = requests.get('https://stream.watsonplatform.net/authorization/api/v1/token', auth=(WATSON_USERNAME, WATSON_PASSWORD), params={'url' : WATSON_URL})
@@ -65,6 +70,8 @@ class MessageHandler():
 
     def handle(self):
         print self.msg
+        speak(uuid, "Guten Tag, willkommen bei botify.")
+
 
 
 class WSHandler(tornado.websocket.WebSocketHandler):
@@ -100,6 +107,18 @@ class WSHandler(tornado.websocket.WebSocketHandler):
         handler.handle()
 
 
+def translate(text, language):
+    headers = {"Authorization ": microsoft_translator_bearer_token}
+    translateUrl = "http://api.microsofttranslator.com/v2/Http.svc/Translate?text={}&to={}".format("Hello World, how are you", "de")
+    translationData = requests.get(translateUrl, headers = headers)
+
+    translation = ElementTree.fromstring(translationData.text.encode('utf-8'))
+    print("Translated: " + translation.text)
+    return translation.text
+
+
+def speak(uuid, text, voice_name):
+    response = client.send_speech(uuid, text=text, voice_name='Marlene')
 
 
 def main():
@@ -117,6 +136,6 @@ def main():
     print "Running on port: " + str(port)
     tornado.ioloop.IOLoop.instance().start()
 
+
 if __name__ == "__main__":
     main()
-
