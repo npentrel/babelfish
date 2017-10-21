@@ -103,7 +103,7 @@ class WSHandler(tornado.websocket.WebSocketHandler):
         print("Websocket Call Connected")
         translate_from = 'de'
         translate_to = 'en-US'
-        features = "Partial,TextToSpeech"
+        features = "Partial"
         uri = "wss://dev.microsofttranslator.com/speech/translate?from={0}&to={1}&features={2}&api-version=1.0".format(translate_from, translate_to, features)
         request = tornado.httpclient.HTTPRequest(uri, headers={
             'Authorization': 'Bearer ' + auth_client.get_access_token(),
@@ -111,7 +111,9 @@ class WSHandler(tornado.websocket.WebSocketHandler):
         self.ws_future = tornado.websocket.websocket_connect(request, on_message_callback=self.tts_completed)
 
     def tts_completed(self, new_message):
-        self.write_message(new_message)
+        msg = json.loads(new_message)
+        if msg['type'] == 'final':
+            print "Complete: " + "'" + msg['recognition'] + "' -> '" + msg['translation'] + "'"
 
     @gen.coroutine
     def on_message(self, message):
@@ -121,8 +123,6 @@ class WSHandler(tornado.websocket.WebSocketHandler):
             header = make_wave_header(16000)
             ws.write_message(header, binary=True)
             self.SentHeader = True
-
-        print "Sending sound to microsoft"
         ws = yield self.ws_future
         ws.write_message(message, binary=True)
 
