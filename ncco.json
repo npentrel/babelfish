@@ -13,6 +13,8 @@
         "uri" : "ws://$hostname/socket",
         "content-type": "audio/l16;rate=16000",
         "headers": {
+          "whoami": "$whoami",
+          "cid": "$cid"
         }
       }
     ]

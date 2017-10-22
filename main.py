@@ -26,11 +26,21 @@ class MainHandler(tornado.web.RequestHandler):
         self.write("Hiii")
         self.finish()
 
+conversation_id_by_phone_number = {
+}
+
+call_id_by_conversation_id = {
+}
+
 class CallHandler(tornado.web.RequestHandler):
     @tornado.web.asynchronous
     def get(self):
         data={}
         data['hostname'] = HOSTNAME
+        data['whoami'] = self.get_query_argument('from')
+        data['cid'] = self.get_query_argument('conversation_uuid')
+        conversation_id_by_phone_number[self.get_query_argument('from')] = self.get_query_argument('conversation_uuid')
+        print conversation_id_by_phone_number
         filein = open('ncco.json')
         src = Template(filein.read())
         filein.close()
@@ -55,7 +65,10 @@ class CallHandler2(tornado.web.RequestHandler):
 class EventHandler(tornado.web.RequestHandler):
     @tornado.web.asynchronous
     def post(self):
-        body = self.request.body
+        print self.request.body
+        body = json.loads(self.request.body)
+        if 'uuid' in body and 'conversation_uuid' in body:
+            call_id_by_conversation_id[body['conversation_uuid']] = body['uuid']
         self.content_type = 'text/plain'
         self.write('ok')
         self.finish()
@@ -112,14 +125,10 @@ def make_wave_header(frame_rate):
 
 class WSHandler(tornado.websocket.WebSocketHandler):
     SentHeader = False
+    whoami = None
 
     to_number = [{'type': 'phone', 'number': '+447858909938'}]
     from_number = {'type': 'phone', 'number': '+447520632440'}
-    answer_url = ['https://' + HOSTNAME + '/ncco2']
-
-    response = client.create_call({'to': to_number, 'from': from_number, 'answer_url': answer_url})
-    call_uuid = response['uuid']
-    print('!!!', response['uuid'])
 
     def open(self):
         print("Websocket Call Connected")
@@ -134,14 +143,23 @@ class WSHandler(tornado.websocket.WebSocketHandler):
 
 
     def tts_completed(self, new_message):
+        if new_message == None:
+            print "Got None Message"
+            return
         msg = json.loads(new_message)
         if msg['type'] == 'final':
             print "Complete: " + "'" + msg['recognition'] + "' -> '" + msg['translation'] + "'"
-            speak(self.call_uuid, msg['translation'], 'Kimberly')
+            for key, value in conversation_id_by_phone_number.iteritems():
+                if key != self.whoami:
+                    speak(call_id_by_conversation_id[value], msg['translation'], 'Kimberly')
+
+    def update_headers(self, message):
+        self.whoami = message['whoami']
 
     @gen.coroutine
     def on_message(self, message):
         if self.SentHeader == False:
+            self.update_headers(json.loads(message))
             print "Sending wav header"
             ws = yield self.ws_future
             header = make_wave_header(16000)
@@ -164,6 +182,7 @@ def translate(text, from_language, to_language):
     return translation.text
 
 def speak(uuid, text, voice_name):
+    print "speaking to: " + uuid
     response = client.send_speech(uuid, text=text, voice_name='Marlene')
 
 def main():
