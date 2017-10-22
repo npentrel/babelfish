@@ -67,26 +67,12 @@ class EventHandler(tornado.web.RequestHandler):
     def post(self):
         print self.request.body
         body = json.loads(self.request.body)
-        if 'uuid' in body and 'conversation_uuid' in body:
+        if 'uuid' in body and 'conversation_uuid' in body and 'direction' in body and body['direction'] == 'inbound':
             call_id_by_conversation_id[body['conversation_uuid']] = body['uuid']
+        print call_id_by_conversation_id
         self.content_type = 'text/plain'
         self.write('ok')
         self.finish()
-
-class MessageHandler():
-    def __init__(self, message):
-        self.msg = message
-
-    def handle(self):
-        print self.msg
-        resp = json.loads(self.msg)
-        if resp:
-            if 'results' in resp and 'alternatives' in resp['results'][0]:
-                if resp['results'][0]['final'] == True:
-                    if 'transcript' in resp['results'][0]['alternatives'][0]:
-                        text = resp["results"][0]["alternatives"][0]["transcript"]
-                        print('To be translated: ' + text)
-                        translate(text, 'en', 'de')
 
 def make_wave_header(frame_rate):
     """
@@ -123,12 +109,10 @@ def make_wave_header(frame_rate):
 
     return data
 
+
 class WSHandler(tornado.websocket.WebSocketHandler):
     SentHeader = False
     whoami = None
-
-    to_number = [{'type': 'phone', 'number': '+447858909938'}]
-    from_number = {'type': 'phone', 'number': '+447520632440'}
 
     def open(self):
         print("Websocket Call Connected")
@@ -139,18 +123,18 @@ class WSHandler(tornado.websocket.WebSocketHandler):
         request = tornado.httpclient.HTTPRequest(uri, headers={
             'Authorization': 'Bearer ' + auth_client.get_access_token(),
         })
-        self.ws_future = tornado.websocket.websocket_connect(request, on_message_callback=self.tts_completed)
 
+        self.ws_future = tornado.websocket.websocket_connect(request, on_message_callback=self.tts_completed)
 
     def tts_completed(self, new_message):
         if new_message == None:
             print "Got None Message"
             return
         msg = json.loads(new_message)
-        if msg['type'] == 'final':
+        if msg['type'] == 'final' and msg['translation'] != '':
             print "Complete: " + "'" + msg['recognition'] + "' -> '" + msg['translation'] + "'"
             for key, value in conversation_id_by_phone_number.iteritems():
-                if key != self.whoami:
+                if key != self.whoami and value != None:
                     speak(call_id_by_conversation_id[value], msg['translation'], 'Kimberly')
 
     def update_headers(self, message):
@@ -165,25 +149,18 @@ class WSHandler(tornado.websocket.WebSocketHandler):
             header = make_wave_header(16000)
             ws.write_message(header, binary=True)
             self.SentHeader = True
-        ws = yield self.ws_future
-        ws.write_message(message, binary=True)
+        else:
+            ws = yield self.ws_future
+            ws.write_message(message, binary=True)
 
     @gen.coroutine
     def on_close(self):
         print("Websocket Call Disconnected")
 
-def translate(text, from_language, to_language):
-    headers = {"Authorization ": microsoft_translator_bearer_token}
-    translateUrl = "http://api.microsofttranslator.com/v2/Http.svc/Translate?text={}&from={}&to={}".format(text, from_language, to_language)
-    translationData = requests.get(translateUrl, headers = headers)
-
-    translation = ElementTree.fromstring(translationData.text.encode('utf-8'))
-    print("Translated: " + translation.text)
-    return translation.text
-
-def speak(uuid, text, voice_name):
-    print "speaking to: " + uuid
-    response = client.send_speech(uuid, text=text, voice_name='Marlene')
+def speak(uuid, text, vn):
+    print "speaking to: " + uuid  + " " + text
+    response = client.send_speech(uuid, text=text, voice_name=vn)
+    print response
 
 def main():
     static_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static')
