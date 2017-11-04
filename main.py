@@ -37,6 +37,7 @@ class CallHandler(tornado.web.RequestHandler):
     def get(self):
         data={}
         data['hostname'] = HOSTNAME
+        data['nexmo_number'] = NEXMO_NUMBER
         data['whoami'] = self.get_query_argument('from')
         data['cid'] = self.get_query_argument('conversation_uuid')
         conversation_id_by_phone_number[self.get_query_argument('from')] = self.get_query_argument('conversation_uuid')
@@ -54,6 +55,7 @@ class CallHandler2(tornado.web.RequestHandler):
     def get(self):
         data={}
         data['hostname'] = HOSTNAME
+        data['nexmo_number'] = NEXMO_NUMBER
         filein = open('ncco.json')
         src = Template(filein.read())
         filein.close()

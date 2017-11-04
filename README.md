@@ -16,3 +16,43 @@ source venv/bin/activate
 vim requirements.txt
 pip install -r requirements.txt
 ```
+
+### Creating a Nexmo account
+
+* [Create a Nexmo account](https://dashboard.nexmo.com/sign-up)
+* Create an application
+  ```bash
+    nexmo app:create "Babelfish" http://your_url.ngrok.io/ncco http://your_url.ngrok.io/event --keyfile private.key
+  ```
+* Purchase a number
+  ```bash
+    nexmo number:buy --country_code GB --confirm
+  ```
+* Link your number and application
+  ```bash
+    nexmo link:app <number> <application_id>
+  ```
+
+### Creating a Microsoft cognitive services account
+
+* [Create a Microsoft Azure account](https://portal.azure.com)
+* Search for Cognitive Services in the search bar
+* Click `add` and create a new `Translator Speech API`
+* Once created, click on the new translator service, then click on `Keys` under the `Resource Management` header
+* Copy `KEY 1` for use in your application
+
+### Configuring the application
+
+Create `config.py` with the following contents:
+
+```python
+NEXMO_APPLICATION_ID="<your_application_id>"
+NEXMO_PRIVATE_KEY="/path/to/private.key"
+MICROSOFT_TRANSLATION_SPEECH_CLIENT_SECRET="<azure_KEY_1>"
+HOSTNAME="your_host.ngrok.io" # Do not add HTTP
+NEXMO_NUMBER="<your_nexmo_number>"
+```
+
+### Running the application
+
+Run `python main.py` then have two (or more) people call your Nexmo number. When one person speaks, the rest will hear in another language. To change the languages used, edit `main.py` lines `120-121`.

@@ -6,7 +6,7 @@
   {
     "action": "connect",
     "eventUrl": ["http://$hostname/event"],
-    "from":"123456",
+    "from":"$nexmo_number",
     "endpoint": [
       {
         "type": "websocket",
