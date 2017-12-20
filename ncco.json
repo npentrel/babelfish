@@ -1,7 +1,7 @@
 [
   {
     "action": "talk",
-    "text": "Please wait while we connect you"
+    "text": "Hello, my name is Botana. The human calling you, does not like phone calls. I am a bot here to facilitate this call. Please speak with me, I will message my human friend what you say and reply for the human."
   },
   {
     "action": "connect",
