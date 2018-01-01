@@ -1,5 +1,5 @@
 """
-Code example for getting a Microsoft Translator access token from the Azure Platform.
+Code example for getting a A from the Azure Platform.
 Visit http://docs.microsofttranslator.com/oauth-token.html to view the API reference
 for Microsoft Azure Cognitive Services authentication service.
 """

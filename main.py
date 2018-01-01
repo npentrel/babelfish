@@ -9,14 +9,13 @@ from tornado import httpserver, httpclient, ioloop, web, websocket, gen
 from xml.etree import ElementTree
 import nexmo
 
-from auth import AzureAuthClient
+from azure_auth_client import AzureAuthClient
 from config import HOSTNAME, CALLER, LANGUAGE1, VOICE1, LANGUAGE2, VOICE2
 from secrets import NEXMO_APPLICATION_ID, NEXMO_PRIVATE_KEY, MICROSOFT_TRANSLATION_SPEECH_CLIENT_SECRET, NEXMO_NUMBER
 
 
-client = nexmo.Client(application_id=NEXMO_APPLICATION_ID, private_key=NEXMO_PRIVATE_KEY)
-auth_client = AzureAuthClient(MICROSOFT_TRANSLATION_SPEECH_CLIENT_SECRET)
-microsoft_translator_bearer_token = 'Bearer ' + auth_client.get_access_token()
+nexmo_client = nexmo.Client(application_id=NEXMO_APPLICATION_ID, private_key=NEXMO_PRIVATE_KEY)
+azure_auth_client = AzureAuthClient(MICROSOFT_TRANSLATION_SPEECH_CLIENT_SECRET)
 
 conversation_id_by_phone_number = {}
 call_id_by_conversation_id = {}
@@ -44,34 +43,34 @@ class EventHandler(web.RequestHandler):
     @web.asynchronous
     def post(self):
         body = json.loads(self.request.body)
-        if 'uuid' in body and 'conversation_uuid' in body and 'direction' in body and body['direction'] == 'inbound':
-            call_id_by_conversation_id[body['conversation_uuid']] = body['uuid']
+        if 'direction' in body and body['direction'] == 'inbound':
+            if 'uuid' in body and 'conversation_uuid' in body:
+                call_id_by_conversation_id[body['conversation_uuid']] = body['uuid']
         self.content_type = 'text/plain'
         self.write('ok')
         self.finish()
 
 
 class WSHandler(websocket.WebSocketHandler):
-    SentHeader = False
     whoami = None
 
     def open(self):
         print("Websocket Call Connected")
 
-    def translator_future(self, translate_from, translate_to, features):
-        uri = "wss://dev.microsofttranslator.com/speech/translate?from={0}&to={1}&features={2}&api-version=1.0".format(translate_from[:2], translate_to, features)
+    def translator_future(self, translate_from, translate_to):
+        uri = "wss://dev.microsofttranslator.com/speech/translate?from={0}&to={1}&api-version=1.0".format(translate_from[:2], translate_to)
         request = httpclient.HTTPRequest(uri, headers={
-            'Authorization': 'Bearer ' + auth_client.get_access_token(),
+            'Authorization': 'Bearer ' + azure_auth_client.get_access_token(),
         })
-        return websocket.websocket_connect(request, on_message_callback=self.tts_completed)
+        return websocket.websocket_connect(request, on_message_callback=self.speech_to_translation_completed)
 
-    def tts_completed(self, new_message):
+    def speech_to_translation_completed(self, new_message):
         if new_message == None:
             print "Got None Message"
             return
         msg = json.loads(new_message)
-        if msg['type'] == 'final' and msg['translation'] != '':
-            print "Complete: " + "'" + msg['recognition'] + "' -> '" + msg['translation'] + "'"
+        if msg['translation'] != '':
+            print "Translated: " + "'" + msg['recognition'] + "' -> '" + msg['translation'] + "'"
             for key, value in conversation_id_by_phone_number.iteritems():
                 if key != self.whoami and value != None:
                     if self.whoami == CALLER:
@@ -79,28 +78,24 @@ class WSHandler(websocket.WebSocketHandler):
                     else:
                         speak(call_id_by_conversation_id[value], msg['translation'], VOICE1)
 
-    def update_headers(self, message):
-        self.whoami = message['whoami']
-
     @gen.coroutine
     def on_message(self, message):
         if type(message) == str:
             ws = yield self.ws_future
             ws.write_message(message, binary=True)
         else:
-            self.update_headers(json.loads(message))
+            message = json.loads(message)
+            self.whoami = message['whoami']
             print "Sending wav header"
             header = make_wave_header(16000)
 
             if self.whoami == CALLER:
-                self.ws_future = self.translator_future(LANGUAGE1, LANGUAGE2, "Partial")
+                self.ws_future = self.translator_future(LANGUAGE1, LANGUAGE2)
             else:
-                self.ws_future = self.translator_future(LANGUAGE2, LANGUAGE1, "Partial")
+                self.ws_future = self.translator_future(LANGUAGE2, LANGUAGE1)
 
             ws = yield self.ws_future
             ws.write_message(header, binary=True)
-
-            self.SentHeader = True
 
     @gen.coroutine
     def on_close(self):
@@ -144,7 +139,7 @@ def make_wave_header(frame_rate):
 
 def speak(uuid, text, vn):
     print "speaking to: " + uuid  + " " + text
-    response = client.send_speech(uuid, text=text, voice_name=vn)
+    response = nexmo_client.send_speech(uuid, text=text, voice_name=vn)
     print response
 
 
