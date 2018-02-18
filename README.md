@@ -14,6 +14,8 @@ Python, Microsoft Translator Speech API, Nexmo Voice API, Ngrok.
 - When setting up the Nexmo Application use a Ngrok forwarding URL for both the Event URL and the Answer URL:
     - Event URL: [http://abc123.ngrok.io/event](http://<abc123>.ngrok.io/event)
     - Answer URL: [http://abc123.ngrok.io/ncco](http://<abc123>.ngrok.io/ncco)
+- [Microsoft’s Translator Speech API](http://docs.microsofttranslator.com/speech-translate.html) key
+- Follow the instructions in the `secrets.py` and `config.py` files.
 
 ## Setup:
 
@@ -27,4 +29,9 @@ pip install -r requirements.txt
 In another terminal window run:
 ```
 ngrok http 5000
+```
+
+## Run:
+```
+python main.py
 ```
