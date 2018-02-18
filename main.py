@@ -29,7 +29,7 @@ class CallHandler(web.RequestHandler):
         data['whoami'] = self.get_query_argument('from')
         data['cid'] = self.get_query_argument('conversation_uuid')
         conversation_id_by_phone_number[self.get_query_argument('from')] = self.get_query_argument('conversation_uuid')
-        print conversation_id_by_phone_number
+        print(conversation_id_by_phone_number)
         filein = open('ncco.json')
         src = Template(filein.read())
         filein.close()
@@ -66,11 +66,11 @@ class WSHandler(websocket.WebSocketHandler):
 
     def speech_to_translation_completed(self, new_message):
         if new_message == None:
-            print "Got None Message"
+            print("Got None Message")
             return
         msg = json.loads(new_message)
         if msg['translation'] != '':
-            print "Translated: " + "'" + msg['recognition'] + "' -> '" + msg['translation'] + "'"
+            print("Translated: " + "'" + msg['recognition'] + "' -> '" + msg['translation'] + "'")
             for key, value in conversation_id_by_phone_number.iteritems():
                 if key != self.whoami and value != None:
                     if self.whoami == CALLER:
@@ -86,7 +86,7 @@ class WSHandler(websocket.WebSocketHandler):
         else:
             message = json.loads(message)
             self.whoami = message['whoami']
-            print "Sending wav header"
+            print("Sending wav header")
             header = make_wave_header(16000)
 
             if self.whoami == CALLER:
@@ -138,9 +138,9 @@ def make_wave_header(frame_rate):
 
 
 def speak(uuid, text, vn):
-    print "speaking to: " + uuid  + " " + text
+    print("speaking to: " + uuid  + " " + text)
     response = nexmo_client.send_speech(uuid, text=text, voice_name=vn)
-    print response
+    print(response)
 
 
 def main():
@@ -153,7 +153,7 @@ def main():
     http_server = httpserver.HTTPServer(application)
     port = int(os.environ.get("PORT", 5000))
     http_server.listen(port)
-    print "Running on port: " + str(port)
+    print("Running on port: " + str(port))
 
     ioloop.IOLoop.instance().start()
 
