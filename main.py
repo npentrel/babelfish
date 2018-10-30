@@ -1,39 +1,28 @@
-import tornado.httpserver
-import tornado.httpclient
-import tornado.ioloop
-import tornado.web
-import tornado.websocket
-from tornado import gen
-import json
-import requests
-import os
-import struct
 from string import Template
-from auth import AzureAuthClient
+import json
+import os
+import requests
+import struct
+import StringIO
+
+from tornado import httpserver, httpclient, ioloop, web, websocket, gen
 from xml.etree import ElementTree
 import nexmo
-import StringIO
-from config import NEXMO_APPLICATION_ID, NEXMO_PRIVATE_KEY, MICROSOFT_TRANSLATION_SPEECH_CLIENT_SECRET, HOSTNAME, NEXMO_NUMBER
 
-client = nexmo.Client(application_id=NEXMO_APPLICATION_ID, private_key=NEXMO_PRIVATE_KEY)
-auth_client = AzureAuthClient(MICROSOFT_TRANSLATION_SPEECH_CLIENT_SECRET)
-microsoft_translator_bearer_token = 'Bearer ' + auth_client.get_access_token()
+from azure_auth_client import AzureAuthClient
+from config import HOSTNAME, CALLER, LANGUAGE1, VOICE1, LANGUAGE2, VOICE2
+from secrets import NEXMO_APPLICATION_ID, NEXMO_PRIVATE_KEY, MICROSOFT_TRANSLATION_SPEECH_CLIENT_SECRET, NEXMO_NUMBER
 
-class MainHandler(tornado.web.RequestHandler):
-    @tornado.web.asynchronous
-    def get(self):
-        self.content_type = 'text/plain'
-        self.write("Hiii")
-        self.finish()
 
-conversation_id_by_phone_number = {
-}
+nexmo_client = nexmo.Client(application_id=NEXMO_APPLICATION_ID, private_key=NEXMO_PRIVATE_KEY)
+azure_auth_client = AzureAuthClient(MICROSOFT_TRANSLATION_SPEECH_CLIENT_SECRET)
 
-call_id_by_conversation_id = {
-}
+conversation_id_by_phone_number = {}
+call_id_by_conversation_id = {}
 
-class CallHandler(tornado.web.RequestHandler):
-    @tornado.web.asynchronous
+
+class CallHandler(web.RequestHandler):
+    @web.asynchronous
     def get(self):
         data={}
         data['hostname'] = HOSTNAME
@@ -41,7 +30,7 @@ class CallHandler(tornado.web.RequestHandler):
         data['whoami'] = self.get_query_argument('from')
         data['cid'] = self.get_query_argument('conversation_uuid')
         conversation_id_by_phone_number[self.get_query_argument('from')] = self.get_query_argument('conversation_uuid')
-        print conversation_id_by_phone_number
+        print(conversation_id_by_phone_number)
         filein = open('ncco.json')
         src = Template(filein.read())
         filein.close()
@@ -50,31 +39,68 @@ class CallHandler(tornado.web.RequestHandler):
         self.set_header("Content-Type", 'application/json; charset="utf-8"')
         self.finish()
 
-class CallHandler2(tornado.web.RequestHandler):
-    @tornado.web.asynchronous
-    def get(self):
-        data={}
-        data['hostname'] = HOSTNAME
-        data['nexmo_number'] = NEXMO_NUMBER
-        filein = open('ncco.json')
-        src = Template(filein.read())
-        filein.close()
-        ncco = json.loads(src.substitute(data))
-        self.write(json.dumps(ncco))
-        self.set_header("Content-Type", 'application/json; charset="utf-8"')
-        self.finish()
-
-class EventHandler(tornado.web.RequestHandler):
-    @tornado.web.asynchronous
+class EventHandler(web.RequestHandler):
+    @web.asynchronous
     def post(self):
-        print self.request.body
         body = json.loads(self.request.body)
-        if 'uuid' in body and 'conversation_uuid' in body and 'direction' in body and body['direction'] == 'inbound':
-            call_id_by_conversation_id[body['conversation_uuid']] = body['uuid']
-        print call_id_by_conversation_id
+        if 'direction' in body and body['direction'] == 'inbound':
+            if 'uuid' in body and 'conversation_uuid' in body:
+                call_id_by_conversation_id[body['conversation_uuid']] = body['uuid']
         self.content_type = 'text/plain'
         self.write('ok')
         self.finish()
+
+
+class WSHandler(websocket.WebSocketHandler):
+    whoami = None
+
+    def open(self):
+        print("Websocket Call Connected")
+
+    def translator_future(self, translate_from, translate_to):
+        uri = "wss://dev.microsofttranslator.com/speech/translate?from={0}&to={1}&api-version=1.0".format(translate_from[:2], translate_to)
+        request = httpclient.HTTPRequest(uri, headers={
+            'Authorization': 'Bearer ' + azure_auth_client.get_access_token(),
+        })
+        return websocket.websocket_connect(request, on_message_callback=self.speech_to_translation_completed)
+
+    def speech_to_translation_completed(self, new_message):
+        if new_message == None:
+            print("Got None Message")
+            return
+        msg = json.loads(new_message)
+        if msg['translation'] != '':
+            print("Translated: " + "'" + msg['recognition'] + "' -> '" + msg['translation'] + "'")
+            for key, value in conversation_id_by_phone_number.iteritems():
+                if key != self.whoami and value != None:
+                    if self.whoami == CALLER:
+                        speak(call_id_by_conversation_id[value], msg['translation'], VOICE2)
+                    else:
+                        speak(call_id_by_conversation_id[value], msg['translation'], VOICE1)
+
+    @gen.coroutine
+    def on_message(self, message):
+        if type(message) == str:
+            ws = yield self.ws_future
+            ws.write_message(message, binary=True)
+        else:
+            message = json.loads(message)
+            self.whoami = message['whoami']
+            print("Sending wav header")
+            header = make_wave_header(16000)
+
+            if self.whoami == CALLER:
+                self.ws_future = self.translator_future(LANGUAGE1, LANGUAGE2)
+            else:
+                self.ws_future = self.translator_future(LANGUAGE2, LANGUAGE1)
+
+            ws = yield self.ws_future
+            ws.write_message(header, binary=True)
+
+    @gen.coroutine
+    def on_close(self):
+        print("Websocket Call Disconnected")
+
 
 def make_wave_header(frame_rate):
     """
@@ -106,79 +132,30 @@ def make_wave_header(frame_rate):
     output.write(struct.pack('<L', 0))
 
     data = output.getvalue()
-
     output.close()
 
     return data
 
 
-class WSHandler(tornado.websocket.WebSocketHandler):
-    SentHeader = False
-    whoami = None
-
-    def open(self):
-        print("Websocket Call Connected")
-        translate_from = 'de'
-        translate_to = 'en-US'
-        features = "Partial"
-        uri = "wss://dev.microsofttranslator.com/speech/translate?from={0}&to={1}&features={2}&api-version=1.0".format(translate_from, translate_to, features)
-        request = tornado.httpclient.HTTPRequest(uri, headers={
-            'Authorization': 'Bearer ' + auth_client.get_access_token(),
-        })
-
-        self.ws_future = tornado.websocket.websocket_connect(request, on_message_callback=self.tts_completed)
-
-    def tts_completed(self, new_message):
-        if new_message == None:
-            print "Got None Message"
-            return
-        msg = json.loads(new_message)
-        if msg['type'] == 'final' and msg['translation'] != '':
-            print "Complete: " + "'" + msg['recognition'] + "' -> '" + msg['translation'] + "'"
-            for key, value in conversation_id_by_phone_number.iteritems():
-                if key != self.whoami and value != None:
-                    speak(call_id_by_conversation_id[value], msg['translation'], 'Kimberly')
-
-    def update_headers(self, message):
-        self.whoami = message['whoami']
-
-    @gen.coroutine
-    def on_message(self, message):
-        if self.SentHeader == False:
-            self.update_headers(json.loads(message))
-            print "Sending wav header"
-            ws = yield self.ws_future
-            header = make_wave_header(16000)
-            ws.write_message(header, binary=True)
-            self.SentHeader = True
-        else:
-            ws = yield self.ws_future
-            ws.write_message(message, binary=True)
-
-    @gen.coroutine
-    def on_close(self):
-        print("Websocket Call Disconnected")
-
 def speak(uuid, text, vn):
-    print "speaking to: " + uuid  + " " + text
-    response = client.send_speech(uuid, text=text, voice_name=vn)
-    print response
+    print("speaking to: " + uuid  + " " + text)
+    response = nexmo_client.send_speech(uuid, text=text, voice_name=vn)
+    print(response)
+
 
 def main():
-    static_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static')
-    application = tornado.web.Application([(r"/", MainHandler),
-                                           (r"/event", EventHandler),
-                                           (r"/ncco", CallHandler),
-                                           (r"/ncco2", CallHandler2),
-                                           (r"/socket", WSHandler),
-                                           (r'/static/(.*)', tornado.web.StaticFileHandler, {'path': static_path}),
-                                          ])
-    http_server = tornado.httpserver.HTTPServer(application)
-    port = int(os.environ.get("PORT", 8000))
-    http_server.listen(port)
-    print "Running on port: " + str(port)
+    application = web.Application([
+        (r"/event", EventHandler),
+        (r"/ncco", CallHandler),
+        (r"/socket", WSHandler),
+    ])
 
-    tornado.ioloop.IOLoop.instance().start()
+    http_server = httpserver.HTTPServer(application)
+    port = int(os.environ.get("PORT", 5000))
+    http_server.listen(port)
+    print("Running on port: " + str(port))
+
+    ioloop.IOLoop.instance().start()
 
 
 if __name__ == "__main__":
