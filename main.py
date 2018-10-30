@@ -1,12 +1,10 @@
 from string import Template
 import json
 import os
-import requests
 import struct
 import StringIO
 
 from tornado import httpserver, httpclient, ioloop, web, websocket, gen
-from xml.etree import ElementTree
 import nexmo
 
 from azure_auth_client import AzureAuthClient
@@ -14,7 +12,8 @@ from config import HOSTNAME, CALLER, LANGUAGE1, VOICE1, LANGUAGE2, VOICE2
 from secrets import NEXMO_APPLICATION_ID, NEXMO_PRIVATE_KEY, MICROSOFT_TRANSLATION_SPEECH_CLIENT_SECRET, NEXMO_NUMBER
 
 
-nexmo_client = nexmo.Client(application_id=NEXMO_APPLICATION_ID, private_key=NEXMO_PRIVATE_KEY)
+nexmo_client = nexmo.Client(application_id=NEXMO_APPLICATION_ID,
+                            private_key=NEXMO_PRIVATE_KEY)
 azure_auth_client = AzureAuthClient(MICROSOFT_TRANSLATION_SPEECH_CLIENT_SECRET)
 
 conversation_id_by_phone_number = {}
@@ -24,7 +23,7 @@ call_id_by_conversation_id = {}
 class CallHandler(web.RequestHandler):
     @web.asynchronous
     def get(self):
-        data={}
+        data = {}
         data['hostname'] = HOSTNAME
         data['nexmo_number'] = NEXMO_NUMBER
         data['whoami'] = self.get_query_argument('from')
@@ -62,21 +61,28 @@ class WSHandler(websocket.WebSocketHandler):
         request = httpclient.HTTPRequest(uri, headers={
             'Authorization': 'Bearer ' + azure_auth_client.get_access_token(),
         })
-        return websocket.websocket_connect(request, on_message_callback=self.speech_to_translation_completed)
+        return websocket.websocket_connect(
+            request,
+            on_message_callback=self.speech_to_translation_completed)
 
     def speech_to_translation_completed(self, new_message):
-        if new_message == None:
+        if new_message is None:
             print("Got None Message")
             return
         msg = json.loads(new_message)
         if msg['translation'] != '':
-            print("Translated: " + "'" + msg['recognition'] + "' -> '" + msg['translation'] + "'")
+            print("Translated: '{}' -> '{}'".format(msg['recognition'],
+                                                    msg['translation']))
             for key, value in conversation_id_by_phone_number.iteritems():
-                if key != self.whoami and value != None:
+                if key != self.whoami and value is not None:
                     if self.whoami == CALLER:
-                        speak(call_id_by_conversation_id[value], msg['translation'], VOICE2)
+                        speak(call_id_by_conversation_id[value],
+                              msg['translation'],
+                              VOICE2)
                     else:
-                        speak(call_id_by_conversation_id[value], msg['translation'], VOICE1)
+                        speak(call_id_by_conversation_id[value],
+                              msg['translation'],
+                              VOICE1)
 
     @gen.coroutine
     def on_message(self, message):
@@ -104,13 +110,14 @@ class WSHandler(websocket.WebSocketHandler):
 
 def make_wave_header(frame_rate):
     """
-    Generate WAV header that precedes actual audio data sent to the speech translation service.
-    :param frame_rate: Sampling frequency (8000 for 8kHz or 16000 for 16kHz).
-    :return: binary string
+    Generate WAV header that precedes actual audio data sent to the speech
+    translation service. :param frame_rate: Sampling frequency (8000 for 8kHz
+    or 16000 for 16kHz). :return: binary string
     """
 
     if frame_rate not in [8000, 16000]:
-        raise ValueError("Sampling frequency, frame_rate, should be 8000 or 16000.")
+        raise ValueError(
+            "Sampling frequency, frame_rate, should be 8000 or 16000.")
 
     nchannels = 1
     bytes_per_sample = 2
@@ -138,7 +145,7 @@ def make_wave_header(frame_rate):
 
 
 def speak(uuid, text, vn):
-    print("speaking to: " + uuid  + " " + text)
+    print("speaking to: {} {}".format(uuid, text))
     response = nexmo_client.send_speech(uuid, text=text, voice_name=vn)
     print(response)
 
