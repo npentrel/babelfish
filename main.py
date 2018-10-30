@@ -26,6 +26,7 @@ class CallHandler(web.RequestHandler):
     def get(self):
         data={}
         data['hostname'] = HOSTNAME
+        data['nexmo_number'] = NEXMO_NUMBER
         data['whoami'] = self.get_query_argument('from')
         data['cid'] = self.get_query_argument('conversation_uuid')
         conversation_id_by_phone_number[self.get_query_argument('from')] = self.get_query_argument('conversation_uuid')
@@ -37,7 +38,6 @@ class CallHandler(web.RequestHandler):
         self.write(json.dumps(ncco))
         self.set_header("Content-Type", 'application/json; charset="utf-8"')
         self.finish()
-
 
 class EventHandler(web.RequestHandler):
     @web.asynchronous

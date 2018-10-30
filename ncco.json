@@ -5,10 +5,8 @@
   },
   {
     "action": "connect",
-    "eventUrl": [
-      "http://$hostname/event"
-    ],
-    "from":"123456",
+    "eventUrl": ["http://$hostname/event"],
+    "from":"$nexmo_number",
     "endpoint": [
       {
         "type": "websocket",
