@@ -8,15 +8,6 @@ Both parties call the service's Nexmo number which will connect them to one anot
 
 Python, Microsoft Translator Speech API, Nexmo Voice API, Ngrok.
 
-## Requirements
-
-- A Nexmo number with voice capability and a Nexmo application
-- When setting up the Nexmo Application use a Ngrok forwarding URL for both the Event URL and the Answer URL:
-    - Event URL: [http://abc123.ngrok.io/event](http://<abc123>.ngrok.io/event)
-    - Answer URL: [http://abc123.ngrok.io/ncco](http://<abc123>.ngrok.io/ncco)
-- [Microsoft’s Translator Speech API](http://docs.microsofttranslator.com/speech-translate.html) key
-- Follow the instructions in the `secrets.py` and `config.py` files.
-
 ## Setup:
 
 ```
@@ -34,6 +25,7 @@ ngrok http 5000
 ### Creating a Nexmo account
 
 * [Create a Nexmo account](https://dashboard.nexmo.com/sign-up)
+* [Install Nexmo CLI](https://github.com/Nexmo/nexmo-cli)
 * Create an application
   ```bash
     nexmo app:create "Babelfish" http://your_url.ngrok.io/ncco http://your_url.ngrok.io/event --keyfile private.key
@@ -55,19 +47,44 @@ ngrok http 5000
 * Once created, click on the new translator service, then click on `Keys` under the `Resource Management` header
 * Copy `KEY 1` for use in your application
 
+## Requirements
+
+- A Nexmo number with voice capability and a Nexmo application
+- When setting up the Nexmo Application use a Ngrok forwarding URL for both the Event URL and the Answer URL:
+    - Event URL: [http://abc123.ngrok.io/event](http://<abc123>.ngrok.io/event)
+    - Answer URL: [http://abc123.ngrok.io/ncco](http://<abc123>.ngrok.io/ncco)
+- [Microsoft’s Translator Speech API](http://docs.microsofttranslator.com/speech-translate.html) key
+- Follow the instructions in the `secrets.py` and `config.py` files.
+
 ### Configuring the application
 
 Create `config.py` with the following contents:
 
 ```python
-NEXMO_APPLICATION_ID="<your_application_id>"
-NEXMO_PRIVATE_KEY="/path/to/private.key"
-MICROSOFT_TRANSLATION_SPEECH_CLIENT_SECRET="<azure_KEY_1>"
 HOSTNAME="your_host.ngrok.io" # Do not add HTTP
-NEXMO_NUMBER="<your_nexmo_number>"
+CALLER="<your_number>"
+LANGUAGE1 = 'de-DE' # the caller's language
+VOICE1 = 'Marlene' # a Nexmo voice for the caller's language
+
+LANGUAGE2 = 'en-US' # the other person's language
+VOICE2 = 'Kimberly' # a Nexmo voice for the other person's language
+```
+
+Create `secrets.py` with the following contents:
+
+```python
+NEXMO_API_KEY = "<your-api-key>"
+NEXMO_API_SECRET = "<your-api-secret>"
+NEXMO_NUMBER = "+447512345678"
+NEXMO_APPLICATION_ID = "<nexmo-application-id>"
+NEXMO_PRIVATE_KEY = '''-----BEGIN PRIVATE KEY-----
+<your-private-key>
+-----END PRIVATE KEY-----'''
+
+# You will have to sign up for a free Microsoft account to use the Microsoft Translator Speech API: http://docs.microsofttranslator.com/speech-translate.html
+MICROSOFT_TRANSLATION_SPEECH_CLIENT_SECRET = "<your-api-key>"
 ```
 
 ### Running the application
 
-Run `python main.py` then have two (or more) people call your Nexmo number. When one person speaks, the rest will hear in another language. To change the languages used, edit `main.py` lines `120-121`.
-
+Run `python main.py` then have two (or more) people call your Nexmo number. When one person speaks, the rest will hear in another language. To change the languages used, edit `config.py`.
